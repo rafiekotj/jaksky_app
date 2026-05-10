@@ -1,382 +1,397 @@
-// prediction_provider.dart
-// State management for the Jakarta Air Quality Prediction feature.
+// lib/providers/prediction_provider.dart
 //
-// Uses Flutter's ChangeNotifier pattern (compatible with both Provider and
-// Riverpod). A Riverpod StateNotifierProvider variant is also included.
+// State management prediksi kualitas udara.
+// Mengorkestrasikan DataService + OnnxService → menghasilkan AirQualityPrediction.
 //
-// Responsibilities:
-//   • Hold user selections (date, station, algorithm)
-//   • Coordinate CsvService + FeatureBuilder + OnnxService
-//   • Expose PredictionResult to the UI
-//   • Manage loading / error states
+// Pola: ChangeNotifier (cocok dengan Provider package).
+// Gunakan dengan:
+//   ChangeNotifierProvider(create: (_) => PredictionProvider()..init())
 
 import 'package:flutter/foundation.dart';
 import 'package:jaksky_app/models/air_quality_model.dart';
 import 'package:jaksky_app/services/data_service.dart';
 import 'package:jaksky_app/services/onnx_service.dart';
 
-// ---------------------------------------------------------------------------
-// PredictionState — immutable snapshot of the current prediction state
-// ---------------------------------------------------------------------------
+// ─── State ────────────────────────────────────────────────────────────────────
 
-enum PredictionStatus { idle, loading, success, error }
+enum PredictionStatus {
+  idle, // belum ada prediksi
+  loading, // sedang proses
+  success, // prediksi berhasil
+  error, // terjadi kesalahan
+}
 
 class PredictionState {
   final PredictionStatus status;
-  final DateTime? selectedDate;
-  final JakartaStation selectedStation;
-  final PredictionAlgorithm selectedAlgorithm;
-  final PredictionResult? result;
+  final AirQualityPrediction? prediction;
   final String? errorMessage;
+
+  // ── Pilihan saat ini ──
+  final DateTime? selectedDate;
+  final JakartaLocation selectedLocation;
+  final AirQualityAlgorithm selectedAlgorithm;
+
+  // ── Loading state inisialisasi ──
+  final bool isInitializing;
+  final bool isInitialized;
 
   const PredictionState({
     this.status = PredictionStatus.idle,
-    this.selectedDate,
-    this.selectedStation = JakartaStation.jakartaPusat,
-    this.selectedAlgorithm = PredictionAlgorithm.randomForest,
-    this.result,
+    this.prediction,
     this.errorMessage,
+    this.selectedDate,
+    this.selectedLocation = JakartaLocation.jakartaPusat,
+    this.selectedAlgorithm = AirQualityAlgorithm.randomForest,
+    this.isInitializing = true,
+    this.isInitialized = false,
   });
+
+  bool get isLoading => status == PredictionStatus.loading;
+  bool get hasResult =>
+      status == PredictionStatus.success && prediction != null;
+  bool get hasError => status == PredictionStatus.error;
 
   PredictionState copyWith({
     PredictionStatus? status,
-    DateTime? selectedDate,
-    JakartaStation? selectedStation,
-    PredictionAlgorithm? selectedAlgorithm,
-    PredictionResult? result,
+    AirQualityPrediction? prediction,
     String? errorMessage,
-    bool clearResult = false,
+    DateTime? selectedDate,
+    JakartaLocation? selectedLocation,
+    AirQualityAlgorithm? selectedAlgorithm,
+    bool? isInitializing,
+    bool? isInitialized,
+    bool clearPrediction = false,
     bool clearError = false,
   }) {
     return PredictionState(
       status: status ?? this.status,
-      selectedDate: selectedDate ?? this.selectedDate,
-      selectedStation: selectedStation ?? this.selectedStation,
-      selectedAlgorithm: selectedAlgorithm ?? this.selectedAlgorithm,
-      result: clearResult ? null : (result ?? this.result),
+      prediction: clearPrediction ? null : (prediction ?? this.prediction),
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
+      selectedDate: selectedDate ?? this.selectedDate,
+      selectedLocation: selectedLocation ?? this.selectedLocation,
+      selectedAlgorithm: selectedAlgorithm ?? this.selectedAlgorithm,
+      isInitializing: isInitializing ?? this.isInitializing,
+      isInitialized: isInitialized ?? this.isInitialized,
     );
   }
-
-  bool get hasResult => result != null && status == PredictionStatus.success;
-  bool get isLoading => status == PredictionStatus.loading;
-  bool get hasError => status == PredictionStatus.error;
-
-  /// True when all required inputs are selected.
-  bool get canPredict => selectedDate != null;
 }
 
-// ---------------------------------------------------------------------------
-// PredictionNotifier — ChangeNotifier (works with Provider package)
-// ---------------------------------------------------------------------------
+// ─── PredictionProvider ───────────────────────────────────────────────────────
 
-class PredictionNotifier extends ChangeNotifier {
-  PredictionState _state = const PredictionState();
-
-  PredictionState get state => _state;
-
-  final CsvService _csvService;
-  final FeatureBuilder _featureBuilder;
+class PredictionProvider extends ChangeNotifier {
+  final DataService _dataService;
   final OnnxService _onnxService;
 
-  PredictionNotifier({
-    CsvService? csvService,
-    FeatureBuilder? featureBuilder,
-    OnnxService? onnxService,
-  }) : _csvService = csvService ?? CsvService.instance,
-       _featureBuilder = featureBuilder ?? FeatureBuilder(),
-       _onnxService = onnxService ?? OnnxService.instance;
+  PredictionState _state = const PredictionState();
+  PredictionState get state => _state;
 
-  // ---------------------------------------------------------------------------
-  // Selection setters
-  // ---------------------------------------------------------------------------
+  // Shortcut getters untuk binding di UI
+  PredictionStatus get status => _state.status;
+  AirQualityPrediction? get prediction => _state.prediction;
+  String? get errorMessage => _state.errorMessage;
+  DateTime? get selectedDate => _state.selectedDate;
+  JakartaLocation get selectedLocation => _state.selectedLocation;
+  AirQualityAlgorithm get selectedAlgo => _state.selectedAlgorithm;
+  bool get isLoading => _state.isLoading;
+  bool get hasResult => _state.hasResult;
+  bool get hasError => _state.hasError;
+  bool get isInitializing => _state.isInitializing;
+  bool get isInitialized => _state.isInitialized;
 
-  /// Set target prediction date.
-  /// Must be strictly in the future (after today).
+  PredictionProvider({DataService? dataService, OnnxService? onnxService})
+    : _dataService = dataService ?? DataService(),
+      _onnxService = onnxService ?? OnnxService();
+
+  // ─── Init ────────────────────────────────────────────────────────────────
+
+  /// Panggil setelah ChangeNotifierProvider dibuat.
+  /// Memuat CSV + preload model default.
+  Future<void> init() async {
+    _setState(_state.copyWith(isInitializing: true));
+
+    try {
+      // Muat data CSV historis
+      await _dataService.init();
+
+      // Preload model default (Random Forest) agar prediksi pertama instan
+      await _onnxService.preloadSession(_state.selectedAlgorithm);
+
+      _setState(_state.copyWith(isInitializing: false, isInitialized: true));
+      debugPrint('[PredictionProvider] Init selesai');
+    } catch (e) {
+      debugPrint('[PredictionProvider] Init error: $e');
+      _setState(
+        _state.copyWith(
+          isInitializing: false,
+          isInitialized: false,
+          status: PredictionStatus.error,
+          errorMessage: 'Gagal inisialisasi: $e',
+        ),
+      );
+    }
+  }
+
+  // ─── Selection Setters ────────────────────────────────────────────────────
+
   void setDate(DateTime date) {
-    final today = _todayMidnight();
+    // Validasi: tidak boleh hari ini atau sebelumnya
+    final today = _today();
     if (!date.isAfter(today)) {
-      debugPrint('PredictionNotifier: date must be after today, ignoring.');
+      debugPrint('[PredictionProvider] Tanggal harus setelah hari ini');
       return;
     }
-    _state = _state.copyWith(
-      selectedDate: date,
-      clearResult: true,
-      clearError: true,
+    _setState(
+      _state.copyWith(
+        selectedDate: date,
+        status: PredictionStatus.idle,
+        clearPrediction: true,
+        clearError: true,
+      ),
     );
-    notifyListeners();
   }
 
-  void setStation(JakartaStation station) {
-    _state = _state.copyWith(
-      selectedStation: station,
-      clearResult: true,
-      clearError: true,
+  void setLocation(JakartaLocation location) {
+    _setState(
+      _state.copyWith(
+        selectedLocation: location,
+        status: PredictionStatus.idle,
+        clearPrediction: true,
+        clearError: true,
+      ),
     );
-    notifyListeners();
   }
 
-  void setAlgorithm(PredictionAlgorithm algorithm) {
-    _state = _state.copyWith(
-      selectedAlgorithm: algorithm,
-      clearResult: true,
-      clearError: true,
+  void setAlgorithm(AirQualityAlgorithm algorithm) {
+    _setState(
+      _state.copyWith(
+        selectedAlgorithm: algorithm,
+        status: PredictionStatus.idle,
+        clearPrediction: true,
+        clearError: true,
+      ),
     );
-    notifyListeners();
+    // Preload sesi baru di background
+    _onnxService.preloadSession(algorithm).catchError((e) {
+      debugPrint('[PredictionProvider] Preload ${algorithm.key} error: $e');
+    });
   }
 
-  // ---------------------------------------------------------------------------
-  // Prediction
-  // ---------------------------------------------------------------------------
+  // ─── Predict ─────────────────────────────────────────────────────────────
 
-  /// Run the full prediction pipeline:
-  ///   1. Build feature vector from historical CSV data
-  ///   2. Run ONNX inference
-  ///   3. Combine results into [PredictionResult]
-  Future<void> predict() async {
-    if (!_state.canPredict) {
-      _setError('Pilih tanggal terlebih dahulu.');
-      return;
+  /// Jalankan prediksi dengan parameter yang diberikan langsung
+  Future<AirQualityPrediction> predict({
+    required DateTime targetDate,
+    required JakartaLocation location,
+    required AirQualityAlgorithm algorithm,
+  }) async {
+    // Validasi
+    final today = _today();
+    if (!targetDate.isAfter(today)) {
+      throw PredictionValidationException('Tanggal harus setelah hari ini');
     }
 
-    _state = _state.copyWith(
-      status: PredictionStatus.loading,
-      clearResult: true,
-      clearError: true,
+    _setState(
+      _state.copyWith(status: PredictionStatus.loading, clearError: true),
     );
-    notifyListeners();
+
+    try {
+      // Step 1: Bangun fitur dari data historis atau estimasi
+      final featureResult = await _dataService.buildFeatures(
+        targetDate,
+        location,
+      );
+      final features = featureResult.features;
+
+      // Step 2: Jalankan inferensi ONNX
+      final inferenceResult = await _onnxService.predict(algorithm, features);
+
+      // Step 3: Bangun info polutan untuk ditampilkan
+      final pollutantInfoList = _dataService.buildPollutantInfo(features);
+
+      // Step 4: Buat objek prediksi lengkap
+      final prediction = AirQualityPrediction(
+        targetDate: targetDate,
+        location: location,
+        algorithm: algorithm,
+        category: inferenceResult.category,
+        probabilities: inferenceResult.probabilityByLabel,
+        features: features,
+        dominantPollutants: pollutantInfoList,
+        isEstimated: featureResult.isEstimated,
+        predictedAt: DateTime.now(),
+      );
+
+      _setState(
+        _state.copyWith(
+          status: PredictionStatus.success,
+          prediction: prediction,
+        ),
+      );
+
+      debugPrint(
+        '[PredictionProvider] Prediksi selesai: '
+        '${prediction.category.displayName} '
+        '(confidence: ${(prediction.confidence * 100).toStringAsFixed(1)}%)',
+      );
+
+      return prediction;
+    } on PredictionValidationException {
+      rethrow;
+    } on OnnxServiceException catch (e) {
+      _setState(
+        _state.copyWith(
+          status: PredictionStatus.error,
+          errorMessage: e.message,
+        ),
+      );
+      rethrow;
+    } catch (e, st) {
+      debugPrint('[PredictionProvider] predict() error: $e\n$st');
+      _setState(
+        _state.copyWith(
+          status: PredictionStatus.error,
+          errorMessage: 'Terjadi kesalahan: $e',
+        ),
+      );
+      rethrow;
+    }
+  }
+
+  /// Jalankan prediksi dengan pilihan saat ini.
+  /// Melempar [PredictionValidationException] jika validasi gagal.
+  Future<void> predictWithCurrentSelection() async {
+    // Validasi
+    if (_state.selectedDate == null) {
+      throw PredictionValidationException(
+        'Pilih tanggal prediksi terlebih dahulu',
+      );
+    }
+    final today = _today();
+    if (!_state.selectedDate!.isAfter(today)) {
+      throw PredictionValidationException('Tanggal harus setelah hari ini');
+    }
+
+    _setState(
+      _state.copyWith(status: PredictionStatus.loading, clearError: true),
+    );
 
     try {
       final targetDate = _state.selectedDate!;
-      final station = _state.selectedStation;
+      final location = _state.selectedLocation;
       final algorithm = _state.selectedAlgorithm;
 
-      // 1. Build features
-      final builtFeatures = await _featureBuilder.buildFeatures(
+      // Step 1: Bangun fitur dari data historis atau estimasi
+      final featureResult = await _dataService.buildFeatures(
+        targetDate,
+        location,
+      );
+      final features = featureResult.features;
+
+      // Step 2: Jalankan inferensi ONNX
+      final inferenceResult = await _onnxService.predict(algorithm, features);
+
+      // Step 3: Bangun info polutan untuk ditampilkan
+      final pollutantInfoList = _dataService.buildPollutantInfo(features);
+
+      // Step 4: Buat objek prediksi lengkap
+      final prediction = AirQualityPrediction(
         targetDate: targetDate,
-        station: station,
-      );
-
-      // 2. Run ONNX model
-      final onnxPrediction = await _onnxService.runPrediction(
+        location: location,
         algorithm: algorithm,
-        featureVector: builtFeatures.featureVector,
+        category: inferenceResult.category,
+        probabilities: inferenceResult.probabilityByLabel,
+        features: features,
+        dominantPollutants: pollutantInfoList,
+        isEstimated: featureResult.isEstimated,
+        predictedAt: DateTime.now(),
       );
 
-      // 3. Assemble result
-      final result = PredictionResult(
-        predictedCategory: onnxPrediction.predictedCategory,
-        probabilities: onnxPrediction.probabilities,
-        likelyCriticalPollutant: builtFeatures.criticalPollutant,
-        estimatedFeatures: builtFeatures.namedFeatures,
-        algorithm: algorithm,
-        targetDate: targetDate,
-        station: station,
-        hasHistoricalData: builtFeatures.hasHistoricalData,
+      _setState(
+        _state.copyWith(
+          status: PredictionStatus.success,
+          prediction: prediction,
+        ),
       );
 
-      _state = _state.copyWith(
-        status: PredictionStatus.success,
-        result: result,
-        clearError: true,
+      debugPrint(
+        '[PredictionProvider] Prediksi selesai: '
+        '${prediction.category.displayName} '
+        '(confidence: ${(prediction.confidence * 100).toStringAsFixed(1)}%)',
       );
+    } on PredictionValidationException {
+      rethrow;
     } on OnnxServiceException catch (e) {
-      _setError('Model error: ${e.message}');
-    } catch (e) {
-      _setError('Terjadi kesalahan: $e');
-    }
-
-    notifyListeners();
-  }
-
-  /// Pre-warm the currently selected ONNX session in the background.
-  Future<void> preloadCurrentModel() async {
-    try {
-      await _onnxService.preloadSession(_state.selectedAlgorithm);
-    } catch (e) {
-      debugPrint('PredictionNotifier: preload failed — $e');
-    }
-  }
-
-  /// Pre-warm all five models (call once at app startup for best UX).
-  Future<void> preloadAllModels() async {
-    // Ensure CSV is loaded first.
-    await _csvService.loadRecords();
-    try {
-      await _onnxService.preloadAllSessions();
-    } catch (e) {
-      debugPrint('PredictionNotifier: preloadAll failed — $e');
+      _setState(
+        _state.copyWith(
+          status: PredictionStatus.error,
+          errorMessage: e.message,
+        ),
+      );
+    } catch (e, st) {
+      debugPrint('[PredictionProvider] predict() error: $e\n$st');
+      _setState(
+        _state.copyWith(
+          status: PredictionStatus.error,
+          errorMessage: 'Terjadi kesalahan: $e',
+        ),
+      );
     }
   }
 
-  /// Reset everything to initial state.
+  /// Reset state ke idle (tanpa hapus pilihan)
   void reset() {
-    _state = const PredictionState();
-    notifyListeners();
-  }
-
-  void _setError(String message) {
-    _state = _state.copyWith(
-      status: PredictionStatus.error,
-      errorMessage: message,
-      clearResult: true,
+    _setState(
+      _state.copyWith(
+        status: PredictionStatus.idle,
+        clearPrediction: true,
+        clearError: true,
+      ),
     );
   }
 
-  DateTime _todayMidnight() {
+  // ─── Helpers ──────────────────────────────────────────────────────────────
+
+  void _setState(PredictionState newState) {
+    _state = newState;
+    notifyListeners();
+  }
+
+  /// Kembalikan DateTime awal hari ini (tanpa jam/menit/detik)
+  DateTime _today() {
     final now = DateTime.now();
     return DateTime(now.year, now.month, now.day);
   }
 
+  /// Tanggal minimum yang bisa dipilih (besok)
+  DateTime get minimumDate {
+    final today = _today();
+    return today.add(const Duration(days: 1));
+  }
+
+  /// Tanggal maksimum yang bisa dipilih (1 tahun ke depan)
+  DateTime get maximumDate {
+    final today = _today();
+    return today.add(const Duration(days: 365));
+  }
+
+  /// Apakah tanggal yang diberikan valid untuk dipilih
+  bool isDateSelectable(DateTime date) {
+    return date.isAfter(_today());
+  }
+
   @override
   void dispose() {
-    // Sessions are managed globally by OnnxService; do NOT close them here
-    // unless this notifier owns them exclusively.
+    _onnxService.closeAllSessions();
     super.dispose();
   }
 }
 
-// ---------------------------------------------------------------------------
-// CsvLoadingNotifier — handles initial CSV data loading state
-// ---------------------------------------------------------------------------
+// ─── Exception ────────────────────────────────────────────────────────────────
 
-enum CsvLoadingStatus { idle, loading, loaded, error }
+class PredictionValidationException implements Exception {
+  final String message;
+  const PredictionValidationException(this.message);
 
-class CsvLoadingState {
-  final CsvLoadingStatus status;
-  final int totalRecords;
-  final String? errorMessage;
-
-  const CsvLoadingState({
-    this.status = CsvLoadingStatus.idle,
-    this.totalRecords = 0,
-    this.errorMessage,
-  });
-
-  bool get isLoaded => status == CsvLoadingStatus.loaded;
-  bool get isLoading => status == CsvLoadingStatus.loading;
+  @override
+  String toString() => 'PredictionValidationException: $message';
 }
-
-class CsvLoadingNotifier extends ChangeNotifier {
-  CsvLoadingState _state = const CsvLoadingState();
-  CsvLoadingState get state => _state;
-
-  final CsvService _csvService;
-
-  CsvLoadingNotifier({CsvService? csvService})
-    : _csvService = csvService ?? CsvService.instance;
-
-  Future<void> load() async {
-    if (_state.isLoaded || _state.isLoading) return;
-
-    _state = const CsvLoadingState(status: CsvLoadingStatus.loading);
-    notifyListeners();
-
-    try {
-      final records = await _csvService.loadRecords();
-      _state = CsvLoadingState(
-        status: CsvLoadingStatus.loaded,
-        totalRecords: records.length,
-      );
-    } catch (e) {
-      _state = CsvLoadingState(
-        status: CsvLoadingStatus.error,
-        errorMessage: 'Gagal memuat data historis: $e',
-      );
-    }
-
-    notifyListeners();
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Convenience factory for ChangeNotifierProvider (Provider package)
-// ---------------------------------------------------------------------------
-//
-// Usage in main.dart:
-//
-//   MultiProvider(
-//     providers: [
-//       ChangeNotifierProvider(create: (_) => CsvLoadingNotifier()..load()),
-//       ChangeNotifierProvider(create: (_) => PredictionNotifier()),
-//     ],
-//     child: MyApp(),
-//   )
-//
-// Usage in a widget:
-//
-//   final notifier = context.watch<PredictionNotifier>();
-//   final state = notifier.state;
-
-// ---------------------------------------------------------------------------
-// Riverpod StateNotifier variant (optional — use if project uses Riverpod)
-// ---------------------------------------------------------------------------
-//
-// Uncomment the block below if you use flutter_riverpod instead of provider.
-//
-// ```dart
-// import 'package:flutter_riverpod/flutter_riverpod.dart';
-//
-// class PredictionStateNotifier extends StateNotifier<PredictionState> {
-//   PredictionStateNotifier() : super(const PredictionState());
-//
-//   final _csvService = CsvService.instance;
-//   final _featureBuilder = FeatureBuilder();
-//   final _onnxService = OnnxService.instance;
-//
-//   void setDate(DateTime date) {
-//     final today = DateTime.now();
-//     final todayMidnight = DateTime(today.year, today.month, today.day);
-//     if (!date.isAfter(todayMidnight)) return;
-//     state = state.copyWith(selectedDate: date, clearResult: true);
-//   }
-//
-//   void setStation(JakartaStation station) =>
-//       state = state.copyWith(selectedStation: station, clearResult: true);
-//
-//   void setAlgorithm(PredictionAlgorithm algo) =>
-//       state = state.copyWith(selectedAlgorithm: algo, clearResult: true);
-//
-//   Future<void> predict() async {
-//     if (!state.canPredict) return;
-//     state = state.copyWith(status: PredictionStatus.loading, clearResult: true);
-//     try {
-//       final builtFeatures = await _featureBuilder.buildFeatures(
-//         targetDate: state.selectedDate!,
-//         station: state.selectedStation,
-//       );
-//       final onnxPrediction = await _onnxService.runPrediction(
-//         algorithm: state.selectedAlgorithm,
-//         featureVector: builtFeatures.featureVector,
-//       );
-//       state = state.copyWith(
-//         status: PredictionStatus.success,
-//         result: PredictionResult(
-//           predictedCategory: onnxPrediction.predictedCategory,
-//           probabilities: onnxPrediction.probabilities,
-//           likelyCriticalPollutant: builtFeatures.criticalPollutant,
-//           estimatedFeatures: builtFeatures.namedFeatures,
-//           algorithm: state.selectedAlgorithm,
-//           targetDate: state.selectedDate!,
-//           station: state.selectedStation,
-//           hasHistoricalData: builtFeatures.hasHistoricalData,
-//         ),
-//       );
-//     } catch (e) {
-//       state = state.copyWith(
-//         status: PredictionStatus.error,
-//         errorMessage: 'Terjadi kesalahan: $e',
-//       );
-//     }
-//   }
-// }
-//
-// final predictionProvider =
-//     StateNotifierProvider<PredictionStateNotifier, PredictionState>(
-//   (ref) => PredictionStateNotifier(),
-// );
-//
-// final csvLoadingProvider = FutureProvider<List<AirQualityRecord>>((ref) {
-//   return CsvService.instance.loadRecords();
-// });
-// ```

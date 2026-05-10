@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:jaksky_app/providers/prediction_provider.dart';
 import 'package:jaksky_app/views/home/home_screen.dart';
 
 void main() {
@@ -10,11 +12,14 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'JakSky',
-      theme: ThemeData(fontFamily: 'Inter'),
-      home: HomeScreen(),
+    return ChangeNotifierProvider(
+      create: (_) => PredictionProvider()..init(),
+      child: MaterialApp(
+        debugShowCheckedModeBanner: false,
+        title: 'JakSky',
+        theme: ThemeData(fontFamily: 'Inter'),
+        home: HomeScreen(),
+      ),
     );
   }
 }

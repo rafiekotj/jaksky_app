@@ -1,289 +1,341 @@
-// data_service.dart
-// Handles:
-//   • CsvService   — loads CleanData.csv from assets and parses rows
-//   • FeatureBuilder — computes the 6 model features for any future date
+// lib/services/data_service.dart
 //
-// Feature order expected by every ONNX model (float_input shape [1,6]):
-//   [0] bulan            (1–12)
-//   [1] hari             (1–31)
-//   [2] stasiun_encoded  (0–4)  DKI1=0, DKI2=1, DKI3=2, DKI4=3, DKI5=4
-//   [3] pm_sepuluh       (PM10 µg/m³)
-//   [4] pm_duakomalima   (PM2.5 µg/m³)
-//   [5] max              (max pollutant value of the day)
+// Gabungan CsvService + FeatureBuilder.
+//
+// CsvService   → memuat dan mem-parsing CleanDatas.csv dari assets
+// FeatureBuilder → menentukan fitur input untuk tanggal & lokasi target
+//                 menggunakan data historis atau estimasi sintetis sebagai fallback
 
-import 'package:flutter/services.dart';
+import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter/foundation.dart';
 import 'package:jaksky_app/models/air_quality_model.dart';
 
-// ---------------------------------------------------------------------------
-// CsvService
-// ---------------------------------------------------------------------------
+// ─── CsvService ───────────────────────────────────────────────────────────────
 
 class CsvService {
-  static const String _assetPath = 'assets/data/CleanData.csv';
-
-  CsvService._();
-  static final CsvService instance = CsvService._();
+  static const String _csvAssetPath = 'assets/data/CleanDatas.csv';
 
   List<AirQualityRecord>? _cachedRecords;
 
-  /// Load and parse CleanData.csv from assets.
-  /// Results are cached after the first load.
+  /// Muat semua record dari CSV. Hasil di-cache setelah load pertama.
   Future<List<AirQualityRecord>> loadRecords() async {
     if (_cachedRecords != null) return _cachedRecords!;
 
-    final raw = await rootBundle.loadString(_assetPath);
+    try {
+      final raw = await rootBundle.loadString(_csvAssetPath);
+      _cachedRecords = _parseCsv(raw);
+      debugPrint(
+        '[CsvService] Loaded ${_cachedRecords!.length} records dari CSV',
+      );
+      return _cachedRecords!;
+    } catch (e) {
+      debugPrint(
+        '[CsvService] Gagal memuat CSV: $e — akan menggunakan data estimasi',
+      );
+      _cachedRecords = [];
+      return _cachedRecords!;
+    }
+  }
+
+  /// Filter record berdasarkan lokasi
+  Future<List<AirQualityRecord>> recordsForLocation(
+    JakartaLocation location,
+  ) async {
+    final all = await loadRecords();
+    // r.location adalah JakartaLocation yang sudah dipetakan via _stasiunToLocation
+    // DKI1→jakartaPusat, DKI2→jakartaUtara, DKI3→jakartaSelatan,
+    // DKI4→jakartaTimur, DKI5→jakartaBarat
+    return all.where((r) => r.location == location).toList();
+  }
+
+  /// Filter record berdasarkan lokasi dan bulan tertentu (lintas tahun)
+  Future<List<AirQualityRecord>> recordsForLocationAndMonth(
+    JakartaLocation location,
+    int month,
+  ) async {
+    final records = await recordsForLocation(location);
+    return records.where((r) => r.date.month == month).toList();
+  }
+
+  // ── CSV Parsing ────────────────────────────────────────────────────────────
+
+  List<AirQualityRecord> _parseCsv(String raw) {
     final lines = raw.split('\n');
     if (lines.isEmpty) return [];
 
-    // The CSV uses semicolons as delimiters and has a UTF-8 BOM on the first
-    // column header; clean it up before parsing.
-    final header = lines.first
-        .replaceAll('\r', '')
-        .replaceAll('\uFEFF', '')
-        .split(';');
+    // Baris pertama = header
+    final headers = _splitCsvLine(
+      lines.first,
+    ).map((h) => h.trim().toLowerCase()).toList();
 
     final records = <AirQualityRecord>[];
     for (int i = 1; i < lines.length; i++) {
-      final line = lines[i].replaceAll('\r', '').trim();
+      final line = lines[i].trim();
       if (line.isEmpty) continue;
 
-      final values = line.split(';');
-      if (values.length < header.length) continue;
+      final values = _splitCsvLine(line);
+      if (values.length < headers.length) continue;
 
-      final rowMap = <String, String>{};
-      for (int j = 0; j < header.length; j++) {
-        rowMap[header[j].trim()] = values[j].trim();
+      final row = <String, dynamic>{};
+      for (int j = 0; j < headers.length; j++) {
+        row[headers[j]] = values[j].trim();
       }
 
-      final record = AirQualityRecord.fromCsvRow(rowMap);
-      if (record != null) records.add(record);
+      try {
+        records.add(AirQualityRecord.fromCsvRow(row));
+      } catch (e) {
+        debugPrint('[CsvService] Skip baris $i: $e');
+      }
     }
-
-    _cachedRecords = records;
     return records;
   }
 
-  /// Filter records by station.
-  Future<List<AirQualityRecord>> recordsForStation(
-    JakartaStation station,
-  ) async {
-    final all = await loadRecords();
-    return all.where((r) => r.station == station).toList();
-  }
+  List<String> _splitCsvLine(String line) {
+    final result = <String>[];
+    final buffer = StringBuffer();
+    bool inQuotes = false;
 
-  /// Filter records by station + month.
-  Future<List<AirQualityRecord>> recordsForStationAndMonth(
-    JakartaStation station,
-    int bulan,
-  ) async {
-    final all = await loadRecords();
-    return all.where((r) => r.station == station && r.bulan == bulan).toList();
-  }
-
-  /// Compute [MonthlyStationStats] for all station/month combinations.
-  /// Used by [FeatureBuilder] when no exact-date record exists.
-  Future<Map<String, MonthlyStationStats>> buildMonthlyStats() async {
-    final all = await loadRecords();
-
-    // Group by "station-month" key
-    final groups = <String, List<AirQualityRecord>>{};
-    for (final r in all) {
-      final key = '${r.station.encodedIndex}_${r.bulan}';
-      groups.putIfAbsent(key, () => []).add(r);
+    for (int i = 0; i < line.length; i++) {
+      final char = line[i];
+      if (char == '"') {
+        inQuotes = !inQuotes;
+      } else if (char == ',' && !inQuotes) {
+        result.add(buffer.toString());
+        buffer.clear();
+      } else {
+        buffer.write(char);
+      }
     }
+    result.add(buffer.toString());
+    return result;
+  }
 
-    final stats = <String, MonthlyStationStats>{};
-    for (final entry in groups.entries) {
-      final rows = entry.value;
-      final station = rows.first.station;
-      final bulan = rows.first.bulan;
+  void clearCache() {
+    _cachedRecords = null;
+  }
+}
 
-      final pm10Vals = rows.map((r) => r.pm10).whereType<double>().toList();
-      final pm25Vals = rows.map((r) => r.pm25).whereType<double>().toList();
-      final maxVals = rows.map((r) => r.max).whereType<double>().toList();
+// ─── FeatureBuilder ───────────────────────────────────────────────────────────
 
-      final avgPm10 = pm10Vals.isNotEmpty
-          ? pm10Vals.reduce((a, b) => a + b) / pm10Vals.length
-          : _globalDefaultPm10(station);
-      final avgPm25 = pm25Vals.isNotEmpty
-          ? pm25Vals.reduce((a, b) => a + b) / pm25Vals.length
-          : _globalDefaultPm25(station);
-      final avgMax = maxVals.isNotEmpty
-          ? maxVals.reduce((a, b) => a + b) / maxVals.length
-          : avgPm25;
+class FeatureBuilder {
+  final CsvService _csvService;
 
-      // Dominant category
-      final catCount = <AirQualityCategory, int>{};
-      for (final r in rows) {
-        catCount[r.category] = (catCount[r.category] ?? 0) + 1;
-      }
-      final dominantCategory = catCount.entries
-          .reduce((a, b) => a.value >= b.value ? a : b)
-          .key;
+  FeatureBuilder({CsvService? csvService})
+    : _csvService = csvService ?? CsvService();
 
-      // Dominant pollutant
-      final pollCount = <CriticalPollutant, int>{};
-      for (final r in rows) {
-        pollCount[r.criticalPollutant] =
-            (pollCount[r.criticalPollutant] ?? 0) + 1;
-      }
-      final dominantPollutant = pollCount.entries
-          .reduce((a, b) => a.value >= b.value ? a : b)
-          .key;
+  /// Bangun fitur input untuk tanggal dan lokasi target.
+  ///
+  /// Strategi:
+  ///  1. Cari rekaman historis pada tanggal yang sama (bulan & hari) di tahun-tahun sebelumnya
+  ///  2. Jika ada → rata-rata nilai polutan rekaman tersebut
+  ///  3. Jika tidak ada → gunakan estimasi sintetis berbasis baseline lokasi + musim
+  Future<FeatureBuildResult> buildFeatures(
+    DateTime targetDate,
+    JakartaLocation location,
+  ) async {
+    // Step 1: cari data historis pada bulan & hari yang sama
+    final monthRecords = await _csvService.recordsForLocationAndMonth(
+      location,
+      targetDate.month,
+    );
 
-      stats[entry.key] = MonthlyStationStats(
-        bulan: bulan,
-        station: station,
-        avgPm10: avgPm10,
-        avgPm25: avgPm25,
-        avgMax: avgMax,
-        dominantCategory: dominantCategory,
-        dominantPollutant: dominantPollutant,
+    // Filter hari ±3 hari untuk sample yang lebih banyak
+    final nearbyRecords = monthRecords.where((r) {
+      final diff = (r.date.day - targetDate.day).abs();
+      return diff <= 3;
+    }).toList();
+
+    if (nearbyRecords.isNotEmpty) {
+      final features = _averageFeatures(nearbyRecords);
+      return FeatureBuildResult(
+        features: features,
+        isEstimated: false,
+        sourceRecordCount: nearbyRecords.length,
+        sourceDescription:
+            '${nearbyRecords.length} data historis (±3 hari, bulan ${targetDate.month})',
       );
     }
 
-    return stats;
-  }
-
-  // Fallback defaults based on overall dataset averages per station area.
-  double _globalDefaultPm10(JakartaStation station) {
-    const defaults = {
-      JakartaStation.jakartaPusat: 49.0,
-      JakartaStation.jakartaUtara: 52.0,
-      JakartaStation.jakartaSelatan: 47.0,
-      JakartaStation.jakartaTimur: 51.0,
-      JakartaStation.jakartaBarat: 53.0,
-    };
-    return defaults[station] ?? 51.0;
-  }
-
-  double _globalDefaultPm25(JakartaStation station) {
-    const defaults = {
-      JakartaStation.jakartaPusat: 72.0,
-      JakartaStation.jakartaUtara: 78.0,
-      JakartaStation.jakartaSelatan: 70.0,
-      JakartaStation.jakartaTimur: 76.0,
-      JakartaStation.jakartaBarat: 79.0,
-    };
-    return defaults[station] ?? 75.0;
-  }
-}
-
-// ---------------------------------------------------------------------------
-// FeatureBuilder
-// ---------------------------------------------------------------------------
-
-/// Builds the 6-element float feature vector for a given future date and
-/// station, using historical averages from the CSV data.
-///
-/// Feature vector layout (matches ONNX model training):
-///   index 0 → bulan  (1–12)
-///   index 1 → hari   (1–31)
-///   index 2 → stasiun_encoded (0–4)
-///   index 3 → pm_sepuluh  (PM10)
-///   index 4 → pm_duakomalima (PM2.5)
-///   index 5 → max
-class FeatureBuilder {
-  final CsvService _csvService;
-  Map<String, MonthlyStationStats>? _monthlyStats;
-
-  FeatureBuilder({CsvService? csvService})
-    : _csvService = csvService ?? CsvService.instance;
-
-  Future<void> _ensureStats() async {
-    _monthlyStats ??= await _csvService.buildMonthlyStats();
-  }
-
-  /// Build feature vector for [targetDate] at [station].
-  ///
-  /// Returns a named feature map (for display) and the ordered float list
-  /// ready to pass into the ONNX session.
-  Future<BuiltFeatures> buildFeatures({
-    required DateTime targetDate,
-    required JakartaStation station,
-  }) async {
-    await _ensureStats();
-
-    final bulan = targetDate.month;
-    final hari = targetDate.day;
-    final stationCode = station.encodedIndex.toDouble();
-
-    final key = '${station.encodedIndex}_$bulan';
-    final stats = _monthlyStats![key];
-
-    bool hasHistoricalData;
-    double pm10, pm25, maxVal;
-    CriticalPollutant criticalPollutant;
-
-    if (stats != null) {
-      pm10 = stats.avgPm10;
-      pm25 = stats.avgPm25;
-      maxVal = stats.avgMax;
-      criticalPollutant = stats.dominantPollutant;
-      hasHistoricalData = true;
-    } else {
-      // No historical data for this station/month → use station-level defaults
-      // with a seasonal adjustment factor.
-      pm10 = _csvService._globalDefaultPm10(station) * _seasonalFactor(bulan);
-      pm25 = _csvService._globalDefaultPm25(station) * _seasonalFactor(bulan);
-      maxVal = pm25;
-      criticalPollutant = CriticalPollutant.pm25;
-      hasHistoricalData = false;
+    // Step 2: coba rata-rata seluruh bulan yang sama
+    if (monthRecords.isNotEmpty) {
+      final features = _averageFeatures(monthRecords);
+      return FeatureBuildResult(
+        features: features,
+        isEstimated: false,
+        sourceRecordCount: monthRecords.length,
+        sourceDescription:
+            '${monthRecords.length} data historis (bulan ${targetDate.month})',
+      );
     }
 
-    final featureVector = [
-      bulan.toDouble(),
-      hari.toDouble(),
-      stationCode,
-      pm10,
-      pm25,
-      maxVal,
-    ];
-
-    return BuiltFeatures(
-      featureVector: featureVector,
-      namedFeatures: {
-        'Bulan': bulan.toDouble(),
-        'Hari': hari.toDouble(),
-        'Stasiun (encoded)': stationCode,
-        'PM10 (µg/m³)': pm10,
-        'PM2.5 (µg/m³)': pm25,
-        'Max': maxVal,
-      },
-      criticalPollutant: criticalPollutant,
-      hasHistoricalData: hasHistoricalData,
+    // Step 3: fallback estimasi sintetis
+    debugPrint(
+      '[FeatureBuilder] Tidak ada data historis untuk ${location.displayName} '
+      'bulan=${targetDate.month}, menggunakan estimasi baseline',
+    );
+    final features = HistoricalBaselineData.estimateFeatures(
+      targetDate,
+      location,
+      seed: targetDate.year * 10000 + targetDate.month * 100 + targetDate.day,
+    );
+    return FeatureBuildResult(
+      features: features,
+      isEstimated: true,
+      sourceRecordCount: 0,
+      sourceDescription:
+          'Estimasi berbasis baseline historis ${location.displayName}',
     );
   }
 
-  /// Seasonal adjustment: dry season (Jun–Sep) in Jakarta has higher pollution.
-  double _seasonalFactor(int bulan) {
-    // Dry season months: June–September → 10% above average
-    if (bulan >= 6 && bulan <= 9) return 1.10;
-    // Wet season: Nov–Mar → 5% below average (rain washes particulates)
-    if (bulan >= 11 || bulan <= 3) return 0.95;
-    // Transition months
-    return 1.00;
+  /// Rata-rata fitur dari kumpulan rekaman
+  AirQualityFeatures _averageFeatures(List<AirQualityRecord> records) {
+    if (records.isEmpty) {
+      return const AirQualityFeatures(
+        pm10: 0,
+        pm25: 0,
+        so2: 0,
+        co: 0,
+        o3: 0,
+        no2: 0,
+      );
+    }
+
+    double sumPm10 = 0, sumPm25 = 0, sumSo2 = 0;
+    double sumCo = 0, sumO3 = 0, sumNo2 = 0;
+    final n = records.length.toDouble();
+
+    for (final r in records) {
+      sumPm10 += r.features.pm10;
+      sumPm25 += r.features.pm25;
+      sumSo2 += r.features.so2;
+      sumCo += r.features.co;
+      sumO3 += r.features.o3;
+      sumNo2 += r.features.no2;
+    }
+
+    return AirQualityFeatures(
+      pm10: _clamp(sumPm10 / n, 0, 600),
+      pm25: _clamp(sumPm25 / n, 0, 300),
+      so2: _clamp(sumSo2 / n, 0, 1000),
+      co: _clamp(sumCo / n, 0, 50),
+      o3: _clamp(sumO3 / n, 0, 400),
+      no2: _clamp(sumNo2 / n, 0, 400),
+    );
+  }
+
+  double _clamp(double v, double min, double max) =>
+      v < min ? min : (v > max ? max : v);
+
+  /// Bangun daftar [PollutantInfo] dari fitur + tentukan polutan dominan
+  List<PollutantInfo> buildPollutantInfoList(AirQualityFeatures features) {
+    final map = features.toMap();
+    return map.entries.map((e) {
+      return PollutantInfo(
+        key: e.key,
+        name: AirQualityFeatures.displayNames[e.key] ?? e.key,
+        unit: AirQualityFeatures.units[e.key] ?? '',
+        value: e.value,
+        level: pollutantLevel(e.key, e.value),
+      );
+    }).toList()..sort((a, b) => b.level.index.compareTo(a.level.index));
   }
 }
 
-/// Output from [FeatureBuilder.buildFeatures].
-class BuiltFeatures {
-  /// Ordered list ready for ONNX input (shape: [1, 6]).
-  final List<double> featureVector;
+// ─── FeatureBuildResult ───────────────────────────────────────────────────────
 
-  /// Human-readable map for display in the UI.
-  final Map<String, double> namedFeatures;
+class FeatureBuildResult {
+  final AirQualityFeatures features;
+  final bool isEstimated;
+  final int sourceRecordCount;
+  final String sourceDescription;
 
-  /// Estimated dominant pollutant based on historical data.
-  final CriticalPollutant criticalPollutant;
-
-  /// Whether historical monthly averages were available.
-  final bool hasHistoricalData;
-
-  const BuiltFeatures({
-    required this.featureVector,
-    required this.namedFeatures,
-    required this.criticalPollutant,
-    required this.hasHistoricalData,
+  const FeatureBuildResult({
+    required this.features,
+    required this.isEstimated,
+    required this.sourceRecordCount,
+    required this.sourceDescription,
   });
+}
+
+// ─── DataService (fasad) ──────────────────────────────────────────────────────
+//
+// Gabungkan CsvService + FeatureBuilder menjadi satu titik akses.
+
+class DataService {
+  final CsvService csvService;
+  final FeatureBuilder featureBuilder;
+
+  DataService() : csvService = CsvService(), featureBuilder = FeatureBuilder() {
+    // Gunakan instance CsvService yang sama
+    // ignore: prefer_initializing_formals
+  }
+
+  DataService.withDeps({
+    required this.csvService,
+    required this.featureBuilder,
+  });
+
+  /// Muat semua data historis (panggil di init)
+  Future<void> init() async {
+    await csvService.loadRecords();
+  }
+
+  /// Bangun fitur untuk prediksi
+  Future<FeatureBuildResult> buildFeatures(
+    DateTime targetDate,
+    JakartaLocation location,
+  ) => featureBuilder.buildFeatures(targetDate, location);
+
+  /// Bangun info polutan untuk ditampilkan di UI
+  List<PollutantInfo> buildPollutantInfo(AirQualityFeatures features) =>
+      featureBuilder.buildPollutantInfoList(features);
+
+  /// Statistik ringkas data historis untuk lokasi tertentu
+  Future<LocationDataStats> getLocationStats(JakartaLocation location) async {
+    final records = await csvService.recordsForLocation(location);
+    if (records.isEmpty) {
+      return LocationDataStats(
+        location: location,
+        totalRecords: 0,
+        dateRange: null,
+        categoryCounts: {},
+      );
+    }
+
+    records.sort((a, b) => a.date.compareTo(b.date));
+    final categoryCounts = <AirQualityCategory, int>{};
+    for (final r in records) {
+      categoryCounts[r.category] = (categoryCounts[r.category] ?? 0) + 1;
+    }
+
+    return LocationDataStats(
+      location: location,
+      totalRecords: records.length,
+      dateRange: DateTimeRange(
+        start: records.first.date,
+        end: records.last.date,
+      ),
+      categoryCounts: categoryCounts,
+    );
+  }
+}
+
+class LocationDataStats {
+  final JakartaLocation location;
+  final int totalRecords;
+  final DateTimeRange? dateRange;
+  final Map<AirQualityCategory, int> categoryCounts;
+
+  const LocationDataStats({
+    required this.location,
+    required this.totalRecords,
+    required this.dateRange,
+    required this.categoryCounts,
+  });
+}
+
+class DateTimeRange {
+  final DateTime start;
+  final DateTime end;
+  const DateTimeRange({required this.start, required this.end});
 }
