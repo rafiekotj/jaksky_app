@@ -114,7 +114,15 @@ class PredictionProvider extends ChangeNotifier {
       await _dataService.init();
 
       // Preload model default (Random Forest) agar prediksi pertama instan
-      await _onnxService.preloadSession(_state.selectedAlgorithm);
+      // SKIP di web karena flutter_onnxruntime tidak fully support web platform
+      if (!kIsWeb) {
+        await _onnxService.preloadSession(_state.selectedAlgorithm);
+      } else {
+        debugPrint(
+          '[PredictionProvider] ONNX preload skipped di web platform. '
+          'Gunakan Android emulator atau device fisik untuk inference.',
+        );
+      }
 
       _setState(_state.copyWith(isInitializing: false, isInitialized: true));
       debugPrint('[PredictionProvider] Init selesai');
@@ -170,10 +178,12 @@ class PredictionProvider extends ChangeNotifier {
         clearError: true,
       ),
     );
-    // Preload sesi baru di background
-    _onnxService.preloadSession(algorithm).catchError((e) {
-      debugPrint('[PredictionProvider] Preload ${algorithm.key} error: $e');
-    });
+    // Preload sesi baru di background (SKIP di web)
+    if (!kIsWeb) {
+      _onnxService.preloadSession(algorithm).catchError((e) {
+        debugPrint('[PredictionProvider] Preload ${algorithm.key} error: $e');
+      });
+    }
   }
 
   // ─── Predict ─────────────────────────────────────────────────────────────
@@ -188,6 +198,14 @@ class PredictionProvider extends ChangeNotifier {
     final today = _today();
     if (!targetDate.isAfter(today)) {
       throw PredictionValidationException('Tanggal harus setelah hari ini');
+    }
+
+    // SKIP prediksi di web - flutter_onnxruntime tidak support web
+    if (kIsWeb) {
+      throw PredictionValidationException(
+        'Prediksi tidak tersedia di web. '
+        'Gunakan Android emulator atau device fisik untuk inference model.',
+      );
     }
 
     _setState(
@@ -269,6 +287,14 @@ class PredictionProvider extends ChangeNotifier {
     final today = _today();
     if (!_state.selectedDate!.isAfter(today)) {
       throw PredictionValidationException('Tanggal harus setelah hari ini');
+    }
+
+    // SKIP prediksi di web - flutter_onnxruntime tidak support web
+    if (kIsWeb) {
+      throw PredictionValidationException(
+        'Prediksi tidak tersedia di web. '
+        'Gunakan Android emulator atau device fisik untuk inference model.',
+      );
     }
 
     _setState(
