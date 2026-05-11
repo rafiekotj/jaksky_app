@@ -33,7 +33,7 @@ class _HomeScreenState extends State<HomeScreen> {
           'JakSky',
           style: TextStyle(
             fontWeight: FontWeight.w700,
-            fontSize: 18,
+            fontSize: 20,
             color: AppColor.textPrimary,
           ),
         ),
@@ -48,13 +48,6 @@ class _HomeScreenState extends State<HomeScreen> {
               decoration: BoxDecoration(
                 color: AppColor.surface,
                 borderRadius: BorderRadius.circular(8),
-                // boxShadow: [
-                //   BoxShadow(
-                //     color: Colors.black.withOpacity(0.08),
-                //     blurRadius: 8,
-                //     offset: const Offset(0, 2),
-                //   ),
-                // ],
               ),
               padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
               child: Column(
@@ -69,7 +62,107 @@ class _HomeScreenState extends State<HomeScreen> {
                             _selectedDate ??
                             DateTime.now().add(const Duration(days: 1)),
                         firstDate: DateTime.now().add(const Duration(days: 1)),
-                        lastDate: DateTime(2030),
+                        lastDate: DateTime(2050, 12, 31),
+                        initialEntryMode: DatePickerEntryMode.calendarOnly,
+                        builder: (context, child) {
+                          return Theme(
+                            data: Theme.of(context).copyWith(
+                              // Warna utama global
+                              colorScheme: ColorScheme.light(
+                                primary: AppColor.primary,
+                                onPrimary: AppColor.textOnPrimary,
+                              ),
+                              // Warna divider global (termasuk di year picker)
+                              dividerColor: AppColor.border,
+                              dividerTheme: DividerThemeData(
+                                color: AppColor.border,
+                                thickness: 1,
+                              ),
+                              datePickerTheme: DatePickerThemeData(
+                                // Background & header
+                                backgroundColor: Colors.white,
+                                headerBackgroundColor: AppColor.surface,
+                                headerForegroundColor: Colors.black,
+                                dividerColor: AppColor.border,
+
+                                // Style teks
+                                weekdayStyle: const TextStyle(
+                                  color: Color(0xFF8E8E93),
+                                  fontSize: 12,
+                                ),
+                                dayStyle: const TextStyle(color: Colors.black),
+                                yearStyle: const TextStyle(color: Colors.black),
+
+                                // Warna hari
+                                dayForegroundColor:
+                                    WidgetStateProperty.resolveWith((states) {
+                                      if (states.contains(
+                                        WidgetState.selected,
+                                      )) {
+                                        return Colors.white;
+                                      }
+                                      if (states.contains(
+                                        WidgetState.disabled,
+                                      )) {
+                                        return const Color(0xFFD1D1D6);
+                                      }
+                                      return Colors.black;
+                                    }),
+                                dayBackgroundColor:
+                                    WidgetStateProperty.resolveWith((states) {
+                                      if (states.contains(
+                                        WidgetState.selected,
+                                      )) {
+                                        return AppColor.primary;
+                                      }
+                                      return Colors.transparent;
+                                    }),
+
+                                // Hari ini
+                                todayForegroundColor: WidgetStateProperty.all(
+                                  AppColor.primary,
+                                ),
+                                todayBackgroundColor: WidgetStateProperty.all(
+                                  Colors.transparent,
+                                ),
+                                todayBorder: BorderSide(
+                                  color: AppColor.primary,
+                                ),
+
+                                // Warna tahun
+                                yearForegroundColor:
+                                    WidgetStateProperty.resolveWith((states) {
+                                      if (states.contains(
+                                        WidgetState.selected,
+                                      )) {
+                                        return AppColor.textOnPrimary;
+                                      }
+                                      return Colors.black;
+                                    }),
+                                yearBackgroundColor:
+                                    WidgetStateProperty.resolveWith((states) {
+                                      if (states.contains(
+                                        WidgetState.selected,
+                                      )) {
+                                        return AppColor.primary;
+                                      }
+                                      return Colors.transparent;
+                                    }),
+                                yearOverlayColor: WidgetStateProperty.all(
+                                  Colors.transparent,
+                                ),
+                              ),
+
+                              // Warna tombol Cancel & OK
+                              textButtonTheme: TextButtonThemeData(
+                                style: TextButton.styleFrom(
+                                  foregroundColor: AppColor.primary,
+                                ),
+                              ),
+                            ),
+                            child: child!,
+                          );
+                        },
                       );
                       if (picked != null) {
                         setState(() => _selectedDate = picked);
@@ -78,11 +171,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 16,
-                        vertical: 16,
+                        vertical: 12,
                       ),
                       decoration: BoxDecoration(
                         color: AppColor.surface,
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(8),
                         border: Border.all(color: AppColor.border),
                       ),
                       child: Row(
@@ -91,9 +184,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           Text(
                             _selectedDate == null
                                 ? 'Pilih Tanggal'
-                                : '${_selectedDate!.day.toString().padLeft(2, '0')}/'
-                                      '${_selectedDate!.month.toString().padLeft(2, '0')}/'
-                                      '${_selectedDate!.year}',
+                                : '${_selectedDate!.day} ${_getMonthName(_selectedDate!.month)} ${_selectedDate!.year}',
                             style: TextStyle(
                               fontSize: 14,
                               color: _selectedDate == null
@@ -112,82 +203,118 @@ class _HomeScreenState extends State<HomeScreen> {
 
                   const SizedBox(height: 12),
 
-                  // ── Lokasi (Dropdown) ─────────────────────────────────────
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFFD1D1D6)),
+                  // ── Lokasi (PopupMenu Button) ─────────────────────────────
+                  PopupMenuButton<JakartaLocation>(
+                    color: AppColor.surface,
+                    constraints: BoxConstraints(
+                      minWidth: MediaQuery.of(context).size.width - 64,
                     ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<JakartaLocation>(
-                        value: _selectedLokasi,
-                        hint: const Text(
-                          'Pilih Lokasi',
-                          style: TextStyle(
-                            fontSize: 14,
+                    onSelected: (value) {
+                      setState(() => _selectedLokasi = value);
+                    },
+                    position: PopupMenuPosition.under,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColor.surface,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: AppColor.border),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            _selectedLokasi == null
+                                ? 'Pilih Lokasi'
+                                : _selectedLokasi!.displayName,
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: _selectedLokasi == null
+                                  ? const Color(0xFF8E8E93)
+                                  : Colors.black,
+                            ),
+                          ),
+                          const Icon(
+                            Icons.keyboard_arrow_down,
                             color: Color(0xFF8E8E93),
                           ),
-                        ),
-                        icon: const Icon(
-                          Icons.keyboard_arrow_down,
-                          color: Color(0xFF8E8E93),
-                        ),
-                        isExpanded: true,
-                        items: JakartaLocation.values
-                            .map(
-                              (location) => DropdownMenuItem(
-                                value: location,
-                                child: Text(location.displayName),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: (value) {
-                          setState(() => _selectedLokasi = value);
-                        },
+                        ],
                       ),
                     ),
+                    itemBuilder: (context) => JakartaLocation.values
+                        .map(
+                          (location) => PopupMenuItem(
+                            value: location,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 5,
+                              ),
+                              child: Text(location.displayName),
+                            ),
+                          ),
+                        )
+                        .toList(),
                   ),
 
                   const SizedBox(height: 12),
 
-                  // ── Algoritma (Dropdown) ──────────────────────────────────
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFFD1D1D6)),
+                  // ── Algoritma (PopupMenu Button) ──────────────────────────
+                  PopupMenuButton<AirQualityAlgorithm>(
+                    color: AppColor.surface,
+                    constraints: BoxConstraints(
+                      minWidth: MediaQuery.of(context).size.width - 64,
                     ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<AirQualityAlgorithm>(
-                        value: _selectedAlgoritma,
-                        hint: const Text(
-                          'Pilih Algoritma',
-                          style: TextStyle(
-                            fontSize: 14,
+                    onSelected: (value) {
+                      setState(() => _selectedAlgoritma = value);
+                    },
+                    position: PopupMenuPosition.under,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColor.surface,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: AppColor.border),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            _selectedAlgoritma == null
+                                ? 'Pilih Algoritma'
+                                : _selectedAlgoritma!.displayName,
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: _selectedAlgoritma == null
+                                  ? const Color(0xFF8E8E93)
+                                  : Colors.black,
+                            ),
+                          ),
+                          const Icon(
+                            Icons.keyboard_arrow_down,
                             color: Color(0xFF8E8E93),
                           ),
-                        ),
-                        icon: const Icon(
-                          Icons.keyboard_arrow_down,
-                          color: Color(0xFF8E8E93),
-                        ),
-                        isExpanded: true,
-                        items: AirQualityAlgorithm.values
-                            .map(
-                              (algo) => DropdownMenuItem(
-                                value: algo,
-                                child: Text(algo.displayName),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: (value) {
-                          setState(() => _selectedAlgoritma = value);
-                        },
+                        ],
                       ),
                     ),
+                    itemBuilder: (context) => AirQualityAlgorithm.values
+                        .map(
+                          (algo) => PopupMenuItem(
+                            value: algo,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 5,
+                              ),
+                              child: Text(algo.displayName),
+                            ),
+                          ),
+                        )
+                        .toList(),
                   ),
 
                   const SizedBox(height: 16),
@@ -428,7 +555,7 @@ class _HomeScreenState extends State<HomeScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text(
-                  'Kepercayaan Prediksi',
+                  'Tingkat Keyakinan Prediksi',
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 14,
