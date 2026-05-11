@@ -59,41 +59,15 @@ enum AirQualityAlgorithm {
 //   3 → TIDAK SEHAT
 
 enum AirQualityCategory {
-  baik(
-    0,
-    'BAIK',
-    'Baik',
-    'Kualitas udara sangat baik, tidak ada risiko kesehatan.',
-  ),
-  sangatTidakSehat(
-    1,
-    'SANGAT TIDAK SEHAT',
-    'Sangat Tidak Sehat',
-    'Kualitas udara sangat buruk. Hindari aktivitas luar ruangan.',
-  ),
-  sedang(
-    2,
-    'SEDANG',
-    'Sedang',
-    'Kualitas udara cukup baik namun beberapa polutan mungkin menjadi perhatian.',
-  ),
-  tidakSehat(
-    3,
-    'TIDAK SEHAT',
-    'Tidak Sehat',
-    'Anggota kelompok sensitif dapat merasakan efek kesehatan. Batasi aktivitas luar ruangan.',
-  );
+  baik(0, 'BAIK', 'Baik'),
+  sangatTidakSehat(1, 'SANGAT TIDAK SEHAT', 'Sangat Tidak Sehat'),
+  sedang(2, 'SEDANG', 'Sedang'),
+  tidakSehat(3, 'TIDAK SEHAT', 'Tidak Sehat');
 
-  const AirQualityCategory(
-    this.classIndex,
-    this.rawLabel,
-    this.displayName,
-    this.description,
-  );
+  const AirQualityCategory(this.classIndex, this.rawLabel, this.displayName);
   final int classIndex;
   final String rawLabel;
   final String displayName;
-  final String description;
 
   static AirQualityCategory fromIndex(int index) {
     return AirQualityCategory.values.firstWhere(

@@ -31,6 +31,7 @@ dependencies:
   flutter:
     sdk: flutter
   flutter_onnxruntime: ^1.7.0
+  lottie: ^3.3.3
   material_symbols_icons: ^4.2928.1
   provider: ^6.1.5+1
 
@@ -62,6 +63,7 @@ flutter:
 
   # To add assets to your application, add an assets section, like this:
   assets:
+    - assets/animations/
     - assets/data/
     - assets/models/
   #   - images/a_dot_burr.jpeg

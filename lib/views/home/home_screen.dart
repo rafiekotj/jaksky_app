@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:lottie/lottie.dart';
+import 'package:material_symbols_icons/material_symbols_icons.dart';
 import 'package:provider/provider.dart';
 import 'package:jaksky_app/core/constants/app_color.dart';
 import 'package:jaksky_app/models/air_quality_model.dart';
@@ -25,6 +27,7 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         backgroundColor: AppColor.surface,
         elevation: 0,
+        scrolledUnderElevation: 0,
         centerTitle: true,
         title: const Text(
           'JakSky',
@@ -40,194 +43,238 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // ── Tanggal (DatePicker) ──────────────────────────────────
-            GestureDetector(
-              onTap: () async {
-                final picked = await showDatePicker(
-                  context: context,
-                  initialDate:
-                      _selectedDate ??
-                      DateTime.now().add(const Duration(days: 1)),
-                  firstDate: DateTime.now().add(const Duration(days: 1)),
-                  lastDate: DateTime(2030),
-                );
-                if (picked != null) {
-                  setState(() => _selectedDate = picked);
-                }
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 16,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFFD1D1D6)),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      _selectedDate == null
-                          ? 'Pilih Tanggal'
-                          : '${_selectedDate!.day.toString().padLeft(2, '0')}/'
-                                '${_selectedDate!.month.toString().padLeft(2, '0')}/'
-                                '${_selectedDate!.year}',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: _selectedDate == null
-                            ? const Color(0xFF8E8E93)
-                            : Colors.black,
+            // ── Form Input Container ──────────────────────────────────
+            Container(
+              decoration: BoxDecoration(
+                color: AppColor.surface,
+                borderRadius: BorderRadius.circular(8),
+                // boxShadow: [
+                //   BoxShadow(
+                //     color: Colors.black.withOpacity(0.08),
+                //     blurRadius: 8,
+                //     offset: const Offset(0, 2),
+                //   ),
+                // ],
+              ),
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // ── Tanggal (DatePicker) ──────────────────────────────────
+                  GestureDetector(
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate:
+                            _selectedDate ??
+                            DateTime.now().add(const Duration(days: 1)),
+                        firstDate: DateTime.now().add(const Duration(days: 1)),
+                        lastDate: DateTime(2030),
+                      );
+                      if (picked != null) {
+                        setState(() => _selectedDate = picked);
+                      }
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 16,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColor.surface,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppColor.border),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            _selectedDate == null
+                                ? 'Pilih Tanggal'
+                                : '${_selectedDate!.day.toString().padLeft(2, '0')}/'
+                                      '${_selectedDate!.month.toString().padLeft(2, '0')}/'
+                                      '${_selectedDate!.year}',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: _selectedDate == null
+                                  ? const Color(0xFF8E8E93)
+                                  : Colors.black,
+                            ),
+                          ),
+                          const Icon(
+                            Icons.keyboard_arrow_down,
+                            color: Color(0xFF8E8E93),
+                          ),
+                        ],
                       ),
                     ),
-                    const Icon(
-                      Icons.keyboard_arrow_down,
-                      color: Color(0xFF8E8E93),
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  // ── Lokasi (Dropdown) ─────────────────────────────────────
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFD1D1D6)),
                     ),
-                  ],
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 12),
-
-            // ── Lokasi (Dropdown) ─────────────────────────────────────
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFD1D1D6)),
-              ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<JakartaLocation>(
-                  value: _selectedLokasi,
-                  hint: const Text(
-                    'Pilih Lokasi',
-                    style: TextStyle(fontSize: 16, color: Color(0xFF8E8E93)),
-                  ),
-                  icon: const Icon(
-                    Icons.keyboard_arrow_down,
-                    color: Color(0xFF8E8E93),
-                  ),
-                  isExpanded: true,
-                  items: JakartaLocation.values
-                      .map(
-                        (location) => DropdownMenuItem(
-                          value: location,
-                          child: Text(location.displayName),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<JakartaLocation>(
+                        value: _selectedLokasi,
+                        hint: const Text(
+                          'Pilih Lokasi',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Color(0xFF8E8E93),
+                          ),
                         ),
-                      )
-                      .toList(),
-                  onChanged: (value) {
-                    setState(() => _selectedLokasi = value);
-                  },
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 12),
-
-            // ── Algoritma (Dropdown) ──────────────────────────────────
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFD1D1D6)),
-              ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<AirQualityAlgorithm>(
-                  value: _selectedAlgoritma,
-                  hint: const Text(
-                    'Pilih Algoritma',
-                    style: TextStyle(fontSize: 16, color: Color(0xFF8E8E93)),
-                  ),
-                  icon: const Icon(
-                    Icons.keyboard_arrow_down,
-                    color: Color(0xFF8E8E93),
-                  ),
-                  isExpanded: true,
-                  items: AirQualityAlgorithm.values
-                      .map(
-                        (algo) => DropdownMenuItem(
-                          value: algo,
-                          child: Text(algo.displayName),
+                        icon: const Icon(
+                          Icons.keyboard_arrow_down,
+                          color: Color(0xFF8E8E93),
                         ),
-                      )
-                      .toList(),
-                  onChanged: (value) {
-                    setState(() => _selectedAlgoritma = value);
-                  },
-                ),
+                        isExpanded: true,
+                        items: JakartaLocation.values
+                            .map(
+                              (location) => DropdownMenuItem(
+                                value: location,
+                                child: Text(location.displayName),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) {
+                          setState(() => _selectedLokasi = value);
+                        },
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  // ── Algoritma (Dropdown) ──────────────────────────────────
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFD1D1D6)),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<AirQualityAlgorithm>(
+                        value: _selectedAlgoritma,
+                        hint: const Text(
+                          'Pilih Algoritma',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Color(0xFF8E8E93),
+                          ),
+                        ),
+                        icon: const Icon(
+                          Icons.keyboard_arrow_down,
+                          color: Color(0xFF8E8E93),
+                        ),
+                        isExpanded: true,
+                        items: AirQualityAlgorithm.values
+                            .map(
+                              (algo) => DropdownMenuItem(
+                                value: algo,
+                                child: Text(algo.displayName),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) {
+                          setState(() => _selectedAlgoritma = value);
+                        },
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // ── Tombol Terapkan ───────────────────────────────────────
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: SizedBox(
+                      width: 112,
+                      height: 44,
+                      child: ElevatedButton(
+                        onPressed:
+                            _selectedDate != null &&
+                                _selectedLokasi != null &&
+                                _selectedAlgoritma != null &&
+                                !_isLoading
+                            ? () => _handlePredict()
+                            : null,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColor.primary,
+                          foregroundColor: AppColor.surface,
+                          disabledBackgroundColor: Colors.grey[300],
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          elevation: 0,
+                        ),
+                        child: _isLoading
+                            ? const SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    AppColor.surface,
+                                  ),
+                                ),
+                              )
+                            : const Text(
+                                'Terapkan',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
 
             const SizedBox(height: 16),
 
-            // ── Tombol Terapkan ───────────────────────────────────────
-            Align(
-              alignment: Alignment.centerRight,
-              child: SizedBox(
-                width: 160,
-                height: 50,
-                child: ElevatedButton(
-                  onPressed:
-                      _selectedDate != null &&
-                          _selectedLokasi != null &&
-                          _selectedAlgoritma != null &&
-                          !_isLoading
-                      ? () => _handlePredict()
-                      : null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF6AABDF),
-                    foregroundColor: Colors.white,
-                    disabledBackgroundColor: Colors.grey[300],
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    elevation: 0,
-                  ),
-                  child: _isLoading
-                      ? const SizedBox(
-                          width: 24,
-                          height: 24,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              Colors.white,
-                            ),
-                          ),
-                        )
-                      : const Text(
-                          'Terapkan',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 20),
-
             // ── Hasil Prediksi ────────────────────────────────────────
             if (_currentPrediction != null) ...[
               _buildResultCard(_currentPrediction!),
               const SizedBox(height: 16),
+              const Text(
+                "Prediksi Polutan",
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 8),
               _buildPollutantGrid(_currentPrediction!),
               const SizedBox(height: 16),
+              const Text(
+                "Indeks",
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 8),
               _buildRecommendationCards(_currentPrediction!),
             ] else
               Container(
                 padding: const EdgeInsets.all(32),
                 alignment: Alignment.center,
-                child: Text(
-                  'Pilih tanggal, lokasi, dan algoritma\nkemudian klik "Terapkan" untuk melihat prediksi',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                child: Column(
+                  children: [
+                    Lottie.asset(
+                      'assets/animations/Weather-mist.json',
+                      width: 180,
+                    ),
+                    Text(
+                      'Pilih tanggal, lokasi, dan algoritma\nkemudian klik "Terapkan" untuk melihat prediksi',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                    ),
+                  ],
                 ),
               ),
 
@@ -247,12 +294,53 @@ class _HomeScreenState extends State<HomeScreen> {
 
     setState(() => _isLoading = true);
 
+    // Debug print untuk melihat nilai yang dipilih
+    debugPrint('[HomeScreen] === Prediksi Dimulai ===');
+    debugPrint('[HomeScreen] Tanggal: ${_selectedDate!.toString()}');
+    debugPrint('[HomeScreen] Lokasi: ${_selectedLokasi!.displayName}');
+    debugPrint('[HomeScreen] Algoritma: ${_selectedAlgoritma!.displayName}');
+    debugPrint('[HomeScreen] Asset Model: ${_selectedAlgoritma!.assetPath}');
+    debugPrint('[HomeScreen] ========================');
+
     try {
       final provider = context.read<PredictionProvider>();
       final prediction = await provider.predict(
         targetDate: _selectedDate!,
         location: _selectedLokasi!,
         algorithm: _selectedAlgoritma!,
+      );
+
+      // Debug print fitur yang digunakan
+      debugPrint('[HomeScreen] === Feature Values ===');
+      debugPrint(
+        '[HomeScreen] PM10: ${prediction.features.pm10.toStringAsFixed(2)}',
+      );
+      debugPrint(
+        '[HomeScreen] PM2.5: ${prediction.features.pm25.toStringAsFixed(2)}',
+      );
+      debugPrint(
+        '[HomeScreen] SO2: ${prediction.features.so2.toStringAsFixed(2)}',
+      );
+      debugPrint(
+        '[HomeScreen] CO: ${prediction.features.co.toStringAsFixed(2)}',
+      );
+      debugPrint(
+        '[HomeScreen] O3: ${prediction.features.o3.toStringAsFixed(2)}',
+      );
+      debugPrint(
+        '[HomeScreen] NO2: ${prediction.features.no2.toStringAsFixed(2)}',
+      );
+      debugPrint('[HomeScreen] isEstimated: ${prediction.isEstimated}');
+      debugPrint('[HomeScreen] ========================');
+
+      // Debug print probabilitas
+      debugPrint('[HomeScreen] === Probabilities ===');
+      prediction.probabilities.forEach((key, value) {
+        debugPrint('[HomeScreen] $key: ${(value * 100).toStringAsFixed(2)}%');
+      });
+      debugPrint('[HomeScreen] ========================');
+      debugPrint(
+        '[HomeScreen] Hasil: ${prediction.category.displayName} (Confidence: ${(prediction.confidence * 100).toStringAsFixed(2)}%)',
       );
 
       setState(() {
@@ -272,26 +360,26 @@ class _HomeScreenState extends State<HomeScreen> {
   Color _getCategoryColor(AirQualityCategory category) {
     switch (category) {
       case AirQualityCategory.baik:
-        return const Color(0xFF7CBF4A);
+        return AppColor.baik;
       case AirQualityCategory.sedang:
-        return const Color(0xFFFFA500);
+        return AppColor.sedang;
       case AirQualityCategory.tidakSehat:
-        return const Color(0xFFFF6B6B);
+        return AppColor.tsehat;
       case AirQualityCategory.sangatTidakSehat:
-        return const Color(0xFF8B0000);
+        return AppColor.stsehat;
     }
   }
 
   Color _getCategoryBackgroundColor(AirQualityCategory category) {
     switch (category) {
       case AirQualityCategory.baik:
-        return const Color(0xFFB5D96A);
+        return AppColor.baikSoft;
       case AirQualityCategory.sedang:
-        return const Color(0xFFFFD699);
+        return AppColor.sedangSoft;
       case AirQualityCategory.tidakSehat:
-        return const Color(0xFFFFB3B3);
+        return AppColor.tsehatSoft;
       case AirQualityCategory.sangatTidakSehat:
-        return const Color(0xFFCC6666);
+        return AppColor.stsehatSoft;
     }
   }
 
@@ -299,19 +387,26 @@ class _HomeScreenState extends State<HomeScreen> {
     return Container(
       decoration: BoxDecoration(
         color: _getCategoryBackgroundColor(prediction.category),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(8),
+        boxShadow: [
+          BoxShadow(
+            color: _getCategoryColor(prediction.category).withAlpha(126),
+            blurRadius: 4,
+            spreadRadius: 2,
+            offset: const Offset(0, 0),
+          ),
+        ],
       ),
       child: Column(
         children: [
           // Status kategori
           Container(
             width: double.infinity,
+            margin: const EdgeInsets.all(16),
             padding: const EdgeInsets.symmetric(vertical: 24),
             decoration: BoxDecoration(
               color: _getCategoryColor(prediction.category),
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(16),
-              ),
+              borderRadius: BorderRadius.circular(8),
             ),
             child: Center(
               child: Text(
@@ -326,28 +421,42 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
 
-          // Deskripsi
+          // Confidence
           Padding(
-            padding: const EdgeInsets.all(16),
-            child: Text(
-              prediction.category.description,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-              ),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Kepercayaan Prediksi',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Text(
+                  '${(prediction.confidence * 100).toStringAsFixed(1)}%',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
             ),
           ),
 
           // Lokasi & tanggal
           Container(
             width: double.infinity,
-            margin: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+            margin: const EdgeInsets.only(top: 16),
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: const BorderRadius.vertical(
+                bottom: Radius.circular(8),
+              ),
             ),
             child: Row(
               children: [
@@ -364,7 +473,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       prediction.location.displayName,
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
-                        fontSize: 15,
+                        fontSize: 14,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -372,7 +481,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       '${prediction.targetDate.day} ${_getMonthName(prediction.targetDate.month)} ${prediction.targetDate.year}',
                       style: const TextStyle(
                         color: Color(0xFF8E8E93),
-                        fontSize: 13,
+                        fontSize: 12,
                       ),
                     ),
                   ],
@@ -389,32 +498,10 @@ class _HomeScreenState extends State<HomeScreen> {
                       prediction.algorithm.displayName,
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
-                        fontSize: 13,
+                        fontSize: 14,
                       ),
                     ),
                   ],
-                ),
-              ],
-            ),
-          ),
-
-          // Confidence
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Kepercayaan Prediksi',
-                  style: TextStyle(color: Colors.white, fontSize: 14),
-                ),
-                Text(
-                  '${(prediction.confidence * 100).toStringAsFixed(1)}%',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
                 ),
               ],
             ),
@@ -458,7 +545,7 @@ class _HomeScreenState extends State<HomeScreen> {
         crossAxisCount: 2,
         crossAxisSpacing: 12,
         mainAxisSpacing: 12,
-        childAspectRatio: 1.2,
+        childAspectRatio: 1.3,
       ),
       itemCount: 6,
       itemBuilder: (context, index) {
@@ -468,54 +555,73 @@ class _HomeScreenState extends State<HomeScreen> {
         return Container(
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: levelColor, width: 2),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: levelColor, width: 1.5),
           ),
           padding: const EdgeInsets.all(12),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.start,
             children: [
-              Text(
-                names[index],
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                ),
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    pollutants[index].toStringAsFixed(2),
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: levelColor,
-                    ),
-                  ),
-                  Text(
-                    units[index],
-                    style: const TextStyle(
-                      color: Color(0xFF8E8E93),
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: levelColor.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(6),
-                ),
+              Align(
+                alignment: Alignment.centerLeft,
                 child: Text(
-                  level.label,
-                  style: TextStyle(
-                    color: levelColor,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
+                  names[index],
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
                   ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerRight,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.baseline,
+                      textBaseline: TextBaseline.alphabetic,
+                      children: [
+                        Text(
+                          pollutants[index].toStringAsFixed(2),
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: levelColor,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          units[index],
+                          style: const TextStyle(
+                            color: Color(0xFF8E8E93),
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: levelColor.withAlpha(45),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        level.label,
+                        style: TextStyle(
+                          color: levelColor,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -528,13 +634,13 @@ class _HomeScreenState extends State<HomeScreen> {
   Color _getPollutantLevelColor(PollutantLevel level) {
     switch (level) {
       case PollutantLevel.good:
-        return const Color(0xFF7CBF4A);
+        return AppColor.baik;
       case PollutantLevel.moderate:
-        return const Color(0xFFFFA500);
+        return AppColor.sedang;
       case PollutantLevel.unhealthy:
-        return const Color(0xFFFF6B6B);
+        return AppColor.tsehat;
       case PollutantLevel.veryUnhealthy:
-        return const Color(0xFF8B0000);
+        return AppColor.stsehat;
     }
   }
 
@@ -553,12 +659,17 @@ class _HomeScreenState extends State<HomeScreen> {
             (rec) => Container(
               decoration: BoxDecoration(
                 color: _getCategoryBackgroundColor(prediction.category),
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(8),
               ),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(rec['icon'] as IconData, color: Colors.white, size: 40),
+                  Icon(
+                    rec['icon'] as IconData,
+                    color: Colors.white,
+                    size: 32,
+                    weight: 700,
+                  ),
                   const SizedBox(height: 12),
                   Text(
                     rec['text'] as String,
@@ -582,68 +693,50 @@ class _HomeScreenState extends State<HomeScreen> {
       case AirQualityCategory.baik:
         return [
           {
-            'icon': Icons.wb_sunny_outlined,
-            'text': 'Udara bersih, aman untuk\naktivitas luar',
+            'icon': Symbols.clear_day,
+            'text': 'Udara bersih,\naman untuk aktivitas',
           },
+          {'icon': Symbols.eco, 'text': 'Risiko kesehatan\nsangat rendah'},
+          {'icon': Symbols.window, 'text': 'Ventilasi alami\ndianjurkan'},
           {
-            'icon': Icons.eco_outlined,
-            'text': 'Risiko kesehatan\nsangat rendah',
-          },
-          {
-            'icon': Icons.grid_view_outlined,
-            'text': 'Ventilasi alami\ndianjurkan',
-          },
-          {
-            'icon': Icons.directions_run,
+            'icon': Symbols.directions_run,
             'text': 'Cocok untuk olahraga\ndi luar ruangan',
           },
         ];
       case AirQualityCategory.sedang:
         return [
-          {
-            'icon': Icons.cloud_outlined,
-            'text': 'Udara cukup baik\nuntuk aktivitas normal',
-          },
-          {
-            'icon': Icons.favorite_border,
-            'text': 'Kelompok sensitif\nmungkin terganggu',
-          },
-          {'icon': Icons.air, 'text': 'Ventilasi alami\nmasih boleh'},
-          {
-            'icon': Icons.directions_walk,
-            'text': 'Aktivitas ringan\ndi luar ruangan',
-          },
+          {'icon': Symbols.foggy, 'text': 'Kualitas udara\ncukup baik'},
+          {'icon': Symbols.medical_mask, 'text': 'Perlindungan\nopsional'},
+          {'icon': Symbols.warning, 'text': 'Waspada\nringan'},
+          {'icon': Symbols.directions_walk, 'text': 'Kurangi\naktivitas berat'},
         ];
       case AirQualityCategory.tidakSehat:
         return [
+          {'icon': Symbols.air, 'text': 'Kualitas udara buruk,\nberisiko'},
+          {'icon': Symbols.masks, 'text': 'Gunakan masker\npelindung'},
           {
-            'icon': Icons.warning_outlined,
-            'text': 'Batasi aktivitas\nluar ruangan',
+            'icon': Symbols.do_not_disturb_on,
+            'text': 'Kurangi aktivitas\ndi luar ruangan',
           },
           {
-            'icon': Icons.health_and_safety,
-            'text': 'Kelompok sensitif\ngunakan masker',
-          },
-          {
-            'icon': Icons.home,
-            'text': 'Tutup jendela dan pintu\nuntuk ventilasi',
-          },
-          {
-            'icon': Icons.do_not_disturb,
-            'text': 'Hindari olahraga\ndi luar ruangan',
+            'icon': Symbols.airline_seat_recline_extra,
+            'text': 'Kelompok sensitif\nsebaiknya tetap di dalam',
           },
         ];
       case AirQualityCategory.sangatTidakSehat:
         return [
+          {'icon': Symbols.dangerous, 'text': 'Udara\nsangat berbahaya'},
           {
-            'icon': Icons.not_interested,
-            'text': 'Hindari aktivitas\nluar ruangan',
+            'icon': Symbols.air_purifier_gen,
+            'text': 'Gunakan masker\ndan air purifier',
           },
-          {'icon': Icons.masks, 'text': 'Semua orang gunakan\nmasker N95'},
-          {'icon': Icons.home, 'text': 'Tutup semua ventilasi\nalami'},
           {
-            'icon': Icons.medical_services,
-            'text': 'Konsultasi dokter jika\nmerasa tidak sehat',
+            'icon': Symbols.window_closed,
+            'text': 'Tutup Jendela,\ntetap di dalam ruangan',
+          },
+          {
+            'icon': Symbols.in_home_mode,
+            'text': 'Hindari aktivitas\ndi luar ruangan',
           },
         ];
     }
