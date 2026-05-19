@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:jaksky_app/core/constants/app_color.dart';
 import 'package:jaksky_app/models/air_quality_model.dart';
 import 'package:jaksky_app/providers/prediction_provider.dart';
+import 'package:jaksky_app/views/home/detail_prediction_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -511,129 +512,155 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildResultCard(AirQualityPrediction prediction) {
-    return Container(
-      decoration: BoxDecoration(
-        color: _getCategoryBackgroundColor(prediction.category),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _navigateToDetailScreen(prediction),
         borderRadius: BorderRadius.circular(8),
-        boxShadow: [
-          BoxShadow(
-            color: _getCategoryColor(prediction.category).withAlpha(126),
-            blurRadius: 4,
-            spreadRadius: 2,
-            offset: const Offset(0, 0),
+        child: Container(
+          decoration: BoxDecoration(
+            color: _getCategoryBackgroundColor(prediction.category),
+            borderRadius: BorderRadius.circular(8),
+            boxShadow: [
+              BoxShadow(
+                color: _getCategoryColor(prediction.category).withAlpha(126),
+                blurRadius: 4,
+                spreadRadius: 2,
+                offset: const Offset(0, 0),
+              ),
+            ],
           ),
-        ],
+          child: Stack(
+            children: [
+              Column(
+                children: [
+                  // Status kategori
+                  Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.symmetric(vertical: 24),
+                    decoration: BoxDecoration(
+                      color: _getCategoryColor(prediction.category),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Center(
+                      child: Text(
+                        prediction.category.displayName.toUpperCase(),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 32,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 2,
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  // Confidence
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Tingkat Keyakinan Prediksi',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(
+                          '${(prediction.confidence * 100).toStringAsFixed(1)}%',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Lokasi & tanggal
+                  Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.only(top: 16),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: const BorderRadius.vertical(
+                        bottom: Radius.circular(8),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.location_on,
+                          color: Color(0xFFE53935),
+                          size: 22,
+                        ),
+                        const SizedBox(width: 8),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              prediction.location.displayName,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '${prediction.targetDate.day} ${_getMonthName(prediction.targetDate.month)} ${prediction.targetDate.year}',
+                              style: const TextStyle(
+                                color: Color(0xFF8E8E93),
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const Spacer(),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            const Text(
+                              'Algoritma',
+                              style: TextStyle(
+                                color: Color(0xFF8E8E93),
+                                fontSize: 12,
+                              ),
+                            ),
+                            Text(
+                              prediction.algorithm.displayName,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
-      child: Column(
-        children: [
-          // Status kategori
-          Container(
-            width: double.infinity,
-            margin: const EdgeInsets.all(16),
-            padding: const EdgeInsets.symmetric(vertical: 24),
-            decoration: BoxDecoration(
-              color: _getCategoryColor(prediction.category),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Center(
-              child: Text(
-                prediction.category.displayName.toUpperCase(),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 32,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 2,
-                ),
-              ),
-            ),
-          ),
+    );
+  }
 
-          // Confidence
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Tingkat Keyakinan Prediksi',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                Text(
-                  '${(prediction.confidence * 100).toStringAsFixed(1)}%',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Lokasi & tanggal
-          Container(
-            width: double.infinity,
-            margin: const EdgeInsets.only(top: 16),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: const BorderRadius.vertical(
-                bottom: Radius.circular(8),
-              ),
-            ),
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.location_on,
-                  color: Color(0xFFE53935),
-                  size: 22,
-                ),
-                const SizedBox(width: 8),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      prediction.location.displayName,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '${prediction.targetDate.day} ${_getMonthName(prediction.targetDate.month)} ${prediction.targetDate.year}',
-                      style: const TextStyle(
-                        color: Color(0xFF8E8E93),
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ),
-                const Spacer(),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    const Text(
-                      'Algoritma',
-                      style: TextStyle(color: Color(0xFF8E8E93), fontSize: 12),
-                    ),
-                    Text(
-                      prediction.algorithm.displayName,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
+  void _navigateToDetailScreen(AirQualityPrediction prediction) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => DetailPredictionScreen(prediction: prediction),
       ),
     );
   }

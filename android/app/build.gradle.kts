@@ -35,6 +35,11 @@ android {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
+            
+            // Disable minification to prevent breaking flutter_onnxruntime JNI bindings
+            // R8 minification causes native symbol names to be obfuscated, breaking ONNX Runtime
+            isMinifyEnabled = false
+            isShrinkResources = false
         }
     }
 }
