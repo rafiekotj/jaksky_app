@@ -1,8 +1,3 @@
-// lib/models/air_quality_model.dart
-//
-// Model kelas, enum, dan data historis kualitas udara Jakarta.
-// Digunakan sebagai kontrak data bersama di seluruh aplikasi.
-
 import 'dart:math';
 
 // ─── Enum Lokasi ─────────────────────────────────────────────────────────────

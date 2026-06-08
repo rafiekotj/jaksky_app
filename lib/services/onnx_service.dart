@@ -1,28 +1,15 @@
-// lib/services/onnx_service.dart
-//
-// Wrapper bersih di atas flutter_onnxruntime ^1.7.0.
-// Mengelola siklus hidup sesi ONNX dan mengekspos satu metode prediksi.
-//
-// INPUT CONTRACT semua model:
-//   float_input        float32[1, 6]   [pm10, pm25, so2, co, o3, no2]
-// OUTPUT CONTRACT semua model:
-//   output_label       int64[1]        indeks kelas 0-3
-//   output_probability float32[1, 4]   probabilitas per kelas
-//
-// CLASS INDEX:
-//   0 → BAIK
-//   1 → SANGAT TIDAK SEHAT
-//   2 → SEDANG
-//   3 → TIDAK SEHAT
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter_onnxruntime/flutter_onnxruntime.dart';
 
 import '../models/air_quality_model.dart';
 
-// ─── Model Hasil Inference Mentah ─────────────────────────────────────────────
-
 class OnnxInferenceResult {
+  // CLASS INDEX:
+  //   0 → BAIK
+  //   1 → SANGAT TIDAK SEHAT
+  //   2 → SEDANG
+  //   3 → TIDAK SEHAT
+
   /// Indeks kelas prediksi (0-3)
   final int labelIndex;
 

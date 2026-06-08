@@ -1,11 +1,3 @@
-// lib/services/data_service.dart
-//
-// Gabungan CsvService + FeatureBuilder.
-//
-// CsvService   → memuat dan mem-parsing CleanDatas.csv dari assets
-// FeatureBuilder → menentukan fitur input untuk tanggal & lokasi target
-//                 menggunakan data historis atau estimasi sintetis sebagai fallback
-
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter/foundation.dart';
 import 'package:jaksky_app/models/air_quality_model.dart';

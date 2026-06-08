@@ -1,12 +1,3 @@
-// lib/providers/prediction_provider.dart
-//
-// State management prediksi kualitas udara.
-// Mengorkestrasikan DataService + OnnxService → menghasilkan AirQualityPrediction.
-//
-// Pola: ChangeNotifier (cocok dengan Provider package).
-// Gunakan dengan:
-//   ChangeNotifierProvider(create: (_) => PredictionProvider()..init())
-
 import 'package:flutter/foundation.dart';
 import 'package:jaksky_app/models/air_quality_model.dart';
 import 'package:jaksky_app/services/data_service.dart';
