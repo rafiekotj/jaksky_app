@@ -4,16 +4,9 @@ import 'package:flutter_onnxruntime/flutter_onnxruntime.dart';
 import '../models/air_quality_model.dart';
 
 class OnnxInferenceResult {
-  // CLASS INDEX:
-  //   0 → BAIK
-  //   1 → SANGAT TIDAK SEHAT
-  //   2 → SEDANG
-  //   3 → TIDAK SEHAT
-
-  /// Indeks kelas prediksi (0-3)
+  // Indeks kategori dari output model (0-3)
   final int labelIndex;
-
-  /// Probabilitas untuk setiap kelas; panjang 4, urutan sesuai CLASS INDEX
+  // Probabilitas untuk tiap kategori
   final List<double> probabilities;
 
   const OnnxInferenceResult({
@@ -23,11 +16,10 @@ class OnnxInferenceResult {
 
   AirQualityCategory get category => AirQualityCategory.fromIndex(labelIndex);
 
-  /// Probabilitas per rawLabel ('BAIK', 'SANGAT TIDAK SEHAT', dst.)
+  // Map probabilitas ke label kategori (BAIK, SEDANG, dst)
   Map<String, double> get probabilityByLabel {
     final categories = AirQualityCategory.values;
-    // values urut berdasarkan deklarasi enum; labelIndex sesuai CLASS INDEX
-    // Kita map berdasarkan .index bukan posisi dalam values
+    // Map index ke raw label untuk UI
     return {
       for (final cat in categories)
         cat.rawLabel: probabilities.length > cat.index
@@ -41,35 +33,31 @@ class OnnxInferenceResult {
       'OnnxInferenceResult(label=$labelIndex, probs=$probabilities)';
 }
 
-// ─── OnnxService ──────────────────────────────────────────────────────────────
-
 class OnnxService {
+  // Wrapper untuk ONNX Runtime (library ML inference)
   final _ort = OnnxRuntime();
 
-  /// Cache sesi per asset path agar tidak reload tiap prediksi
+  // Simpan session model agar tidak reload
   final Map<String, OrtSession> _sessions = {};
 
-  // ─── Session Management ───────────────────────────────────────────────────
-
-  /// Preload sesi model tertentu. Panggil di init agar prediksi pertama cepat.
+  // Siapkan satu model sebelum digunakan
   Future<void> preloadSession(AirQualityAlgorithm algorithm) async {
     await _getOrCreateSession(algorithm.assetPath);
   }
 
-  /// Preload semua sesi sekaligus (opsional; berguna di splashscreen).
+  // Siapkan semua 5 model sekaligus di startup
   Future<void> preloadAllSessions() async {
     for (final algo in AirQualityAlgorithm.values) {
       await _getOrCreateSession(algo.assetPath);
     }
   }
 
-  /// Tutup satu sesi dan hapus dari cache.
   Future<void> closeSession(AirQualityAlgorithm algorithm) async {
     final session = _sessions.remove(algorithm.assetPath);
     await session?.close();
   }
 
-  /// Tutup semua sesi (panggil saat dispose provider / app exit).
+  // Tutup semua sesi & bersihkan memory
   Future<void> closeAllSessions() async {
     for (final session in _sessions.values) {
       await session.close();
@@ -77,30 +65,27 @@ class OnnxService {
     _sessions.clear();
   }
 
-  // ─── Inference ────────────────────────────────────────────────────────────
-
-  /// Jalankan inferensi dengan fitur yang diberikan menggunakan algoritma tertentu.
-  /// Mengembalikan [OnnxInferenceResult] dengan label integer dan probabilitas float32.
+  // Jalankan model ML dengan fitur polutan
   Future<OnnxInferenceResult> predict(
     AirQualityAlgorithm algorithm,
     AirQualityFeatures features,
   ) async {
+    // Simpan resource untuk cleanup nanti
     OrtValue? inputTensor;
     Map<String, OrtValue>? outputs;
 
     try {
+      // Step 1: Siapkan session model (cache atau buat baru)
       final session = await _getOrCreateSession(algorithm.assetPath);
-
-      // ── Buat tensor input float32[1, 6] ──────────────────────────────────
+      // Step 2: Konversi fitur jadi tensor (array 1x6)
       final inputData = Float32List.fromList(
         features.toInputList().map((v) => v.toDouble()).toList(),
       );
       inputTensor = await OrtValue.fromList(inputData, [1, 6]);
-
-      // ── Jalankan inferensi ────────────────────────────────────────────────
+      // Step 3: Jalankan model & dapat output
       outputs = await session.run({'float_input': inputTensor});
 
-      // ── Baca output_label (int64[1]) ──────────────────────────────────────
+      // Step 4: Parse output label (kategori 0-3)
       final labelTensor = outputs['output_label'];
       if (labelTensor == null) {
         throw OnnxServiceException(
@@ -110,7 +95,7 @@ class OnnxService {
       final labelRaw = await labelTensor.asFlattenedList();
       final labelIndex = (labelRaw.first as num).toInt();
 
-      // ── Baca output_probability (float32[1, 4]) ───────────────────────────
+      // Step 5: Parse output probabilitas (4 nilai, 1 per kategori)
       final probTensor = outputs['output_probability'];
       if (probTensor == null) {
         throw OnnxServiceException(
@@ -132,15 +117,13 @@ class OnnxService {
       );
     } on OnnxServiceException {
       rethrow;
-    } catch (e, st) {
-      debugPrint('[OnnxService] Error prediksi ${algorithm.key}: $e\n$st');
+    } catch (e) {
       throw OnnxServiceException(
         'Gagal menjalankan model ${algorithm.displayName}: $e',
       );
     } finally {
-      // ── Dispose tensor input ──────────────────────────────────────────────
+      // Bersihkan tensor dari GPU memory
       await inputTensor?.dispose();
-      // ── Dispose tensor output ─────────────────────────────────────────────
       if (outputs != null) {
         for (final tensor in outputs.values) {
           await tensor.dispose();
@@ -149,31 +132,24 @@ class OnnxService {
     }
   }
 
-  // ─── Helpers ──────────────────────────────────────────────────────────────
-
+  // Ambil session atau buat baru (caching)
   Future<OrtSession> _getOrCreateSession(String assetPath) async {
+    // Jika sudah ada di cache, pakai yang lama
     if (_sessions.containsKey(assetPath)) {
       return _sessions[assetPath]!;
     }
 
-    debugPrint('[OnnxService] Memuat sesi: $assetPath');
     try {
+      // Load model dari asset folder
       final session = await _ort.createSessionFromAsset(assetPath);
+      // Simpan ke cache untuk pakai lagi
       _sessions[assetPath] = session;
-
-      // Log info sesi (debug only)
-      debugPrint(
-        '[OnnxService] Sesi dimuat. Inputs: ${session.inputNames}, Outputs: ${session.outputNames}',
-      );
-
       return session;
     } catch (e) {
       throw OnnxServiceException('Gagal memuat model "$assetPath": $e');
     }
   }
 }
-
-// ─── Exception ────────────────────────────────────────────────────────────────
 
 class OnnxServiceException implements Exception {
   final String message;
