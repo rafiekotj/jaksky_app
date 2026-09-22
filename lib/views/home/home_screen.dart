@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
-import 'package:material_symbols_icons/material_symbols_icons.dart';
 import 'package:provider/provider.dart';
 import 'package:jaksky_app/core/constants/app_color.dart';
 import 'package:jaksky_app/models/air_quality_model.dart';
@@ -382,7 +381,7 @@ class _HomeScreenState extends State<HomeScreen> {
               _buildPollutantGrid(_currentPrediction!),
               const SizedBox(height: 16),
               const Text(
-                "Indeks",
+                "Indeks Rekomendasi",
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 8),
@@ -818,12 +817,7 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(
-                    rec['icon'] as IconData,
-                    color: Colors.white,
-                    size: 32,
-                    weight: 700,
-                  ),
+                  rec['icon'] as Widget,
                   const SizedBox(height: 12),
                   Text(
                     rec['text'] as String,
@@ -847,49 +841,96 @@ class _HomeScreenState extends State<HomeScreen> {
       case AirQualityCategory.baik:
         return [
           {
-            'icon': Symbols.clear_day,
+            'icon': const Icon(Icons.sunny, color: Colors.white, size: 32),
             'text': 'Udara bersih,\naman untuk aktivitas',
           },
-          {'icon': Symbols.eco, 'text': 'Risiko kesehatan\nsangat rendah'},
-          {'icon': Symbols.window, 'text': 'Ventilasi alami\ndianjurkan'},
           {
-            'icon': Symbols.directions_run,
+            'icon': const Icon(Icons.eco, color: Colors.white, size: 32),
+            'text': 'Risiko kesehatan\nsangat rendah',
+          },
+          {
+            'icon': const Icon(Icons.window, color: Colors.white, size: 32),
+            'text': 'Ventilasi alami\ndianjurkan',
+          },
+          {
+            'icon': const Icon(
+              Icons.directions_run,
+              color: Colors.white,
+              size: 32,
+            ),
             'text': 'Cocok untuk olahraga\ndi luar ruangan',
           },
         ];
       case AirQualityCategory.sedang:
         return [
-          {'icon': Symbols.foggy, 'text': 'Kualitas udara\ncukup baik'},
-          {'icon': Symbols.medical_mask, 'text': 'Perlindungan\nopsional'},
-          {'icon': Symbols.warning, 'text': 'Waspada\nringan'},
-          {'icon': Symbols.directions_walk, 'text': 'Kurangi\naktivitas berat'},
+          {
+            'icon': const Icon(Icons.foggy, color: Colors.white, size: 32),
+            'text': 'Kualitas udara\ncukup baik',
+          },
+          {
+            'icon': const Icon(Icons.masks, color: Colors.white, size: 32),
+            'text': 'Perlindungan\nopsional',
+          },
+          {
+            'icon': const Icon(Icons.warning, color: Colors.white, size: 32),
+            'text': 'Waspada\nringan',
+          },
+          {
+            'icon': const Icon(
+              Icons.directions_walk,
+              color: Colors.white,
+              size: 32,
+            ),
+            'text': 'Kurangi\naktivitas berat',
+          },
         ];
       case AirQualityCategory.tidakSehat:
         return [
-          {'icon': Symbols.air, 'text': 'Kualitas udara buruk,\nberisiko'},
-          {'icon': Symbols.masks, 'text': 'Gunakan masker\npelindung'},
           {
-            'icon': Symbols.do_not_disturb_on,
+            'icon': const Icon(Icons.air, color: Colors.white, size: 32),
+            'text': 'Kualitas udara buruk,\nberisiko',
+          },
+          {
+            'icon': const Icon(Icons.masks, color: Colors.white, size: 32),
+            'text': 'Gunakan masker\npelindung',
+          },
+          {
+            'icon': const Icon(
+              Icons.do_not_disturb_on,
+              color: Colors.white,
+              size: 32,
+            ),
             'text': 'Kurangi aktivitas\ndi luar ruangan',
           },
           {
-            'icon': Symbols.airline_seat_recline_extra,
+            'icon': const Icon(
+              Icons.airline_seat_recline_extra,
+              color: Colors.white,
+              size: 32,
+            ),
             'text': 'Kelompok sensitif\nsebaiknya tetap di dalam',
           },
         ];
       case AirQualityCategory.sangatTidakSehat:
         return [
-          {'icon': Symbols.dangerous, 'text': 'Udara\nsangat berbahaya'},
           {
-            'icon': Symbols.air_purifier_gen,
+            'icon': const Icon(Icons.dangerous, color: Colors.white, size: 32),
+            'text': 'Udara\nsangat berbahaya',
+          },
+          {
+            'icon': const Icon(Icons.filter_alt, color: Colors.white, size: 32),
             'text': 'Gunakan masker\ndan air purifier',
           },
           {
-            'icon': Symbols.window_closed,
+            'icon': const Icon(
+              Icons.sensor_window,
+              color: Colors.white,
+              size: 32,
+            ),
             'text': 'Tutup Jendela,\ntetap di dalam ruangan',
           },
           {
-            'icon': Symbols.in_home_mode,
+            'icon': const Icon(Icons.home, color: Colors.white, size: 32),
             'text': 'Hindari aktivitas\ndi luar ruangan',
           },
         ];

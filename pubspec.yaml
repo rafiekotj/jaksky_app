@@ -33,7 +33,6 @@ dependencies:
   flutter_launcher_icons: ^0.14.4
   flutter_onnxruntime: ^1.7.0
   lottie: ^3.3.3
-  material_symbols_icons: ^4.2928.1
   provider: ^6.1.5+1
 
   # The following adds the Cupertino Icons font to your application.

@@ -42,7 +42,10 @@ class DetailPredictionScreen extends StatelessWidget {
             // ── Kategori Guide Infografis ───────────────────────────────────────
             _buildCategoryGuideCard(),
 
-            const SizedBox(height: 24),
+            const SizedBox(height: 20),
+
+            // ── Standar Parameter ISPU (Normal) ─────────────────────────────
+            _buildStandardISPUCard(),
           ],
         ),
       ),
@@ -220,5 +223,93 @@ class DetailPredictionScreen extends StatelessWidget {
       case AirQualityCategory.sangatTidakSehat:
         return AppColor.stsehatSoft;
     }
+  }
+
+  Widget _buildStandardISPUCard() {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColor.surface,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(12),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Batas Normal Kualitas Udara (Kategori BAIK)',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.bold,
+              color: AppColor.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 16),
+          _buildStandardRow('PM10', 'Partikel debu', '≤ 50', 'µg/m³'),
+          _buildStandardRow('PM2.5', 'Partikel halus', '≤ 15.5', 'µg/m³'),
+          _buildStandardRow('SO₂', 'Sulfur dioksida', '≤ 52', 'µg/m³'),
+          _buildStandardRow('CO', 'Karbon monoksida', '≤ 4.0', 'mg/m³'),
+          _buildStandardRow('O₃', 'Ozon', '≤ 50', 'µg/m³'),
+          _buildStandardRow('NO₂', 'Nitrogen dioksida', '≤ 40', 'µg/m³'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStandardRow(
+    String name,
+    String desc,
+    String limit,
+    String unit,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                name,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
+              ),
+              Text(
+                desc,
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+            ],
+          ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text(
+                limit,
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: AppColor.baik,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Text(
+                unit,
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 }
